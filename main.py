@@ -1,20 +1,15 @@
 import asyncio
-import json
-import os
 import re
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, WebSocket, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-import websockets
 
-STREAMERBOT_WS = os.getenv("STREAMERBOT_WS", "ws://localhost:8000")
+# =========================
+# APP SETUP
+# =========================
 
 app = FastAPI()
-
-# =========================
-# CORS (IMPORTANT FOR OBS/LOCAL TESTING)
-# =========================
 
 app.add_middleware(
     CORSMiddleware,
@@ -24,14 +19,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# =========================
-# STATIC FILES (THIS FIXES YOUR /overlay.html ISSUE)
-# =========================
-
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+# Serve overlay + assets safely
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # =========================
-# WEBSOCKET CLIENTS
+# STATE
 # =========================
 
 clients = set()
@@ -46,6 +38,7 @@ async def broadcaster():
         msg = await queue.get()
 
         dead = []
+
         for ws in clients:
             try:
                 await ws.send_json(msg)
@@ -77,35 +70,34 @@ def parse_text(text: str):
     if not match:
         return None
 
-    return (
-        match.group(1).lower(),
-        match.group(2),
-        match.group(3)
-    )
+    return {
+        "platform": match.group(1).lower(),
+        "user": match.group(2).strip(),
+        "message": match.group(3).strip(),
+        "badges": []
+    }
 
 # =========================
-# STREAMER.BOT WORKER
+# STREAMER.BOT / BRIDGE INPUT
 # =========================
-
-from fastapi import Request
 
 @app.post("/event")
 async def event(req: Request):
     data = await req.json()
+
+    # If it's raw text format from TikTok/Rumble
+    if isinstance(data, str):
+        parsed = parse_text(data)
+        if parsed:
+            await push(**parsed)
+            return {"ok": True}
+
+    # If it's structured event
     await queue.put(data)
     return {"ok": True}
 
 # =========================
-# STARTUP
-# =========================
-
-@app.on_event("startup")
-async def startup():
-    asyncio.create_task(broadcaster())
-    asyncio.create_task(streamerbot_worker())
-
-# =========================
-# WEBSOCKET ENDPOINT
+# WEBSOCKET FOR OVERLAY
 # =========================
 
 @app.websocket("/chat")
@@ -118,3 +110,11 @@ async def chat(ws: WebSocket):
             await ws.receive_text()
     except:
         clients.remove(ws)
+
+# =========================
+# STARTUP TASKS
+# =========================
+
+@app.on_event("startup")
+async def startup():
+    asyncio.create_task(broadcaster())

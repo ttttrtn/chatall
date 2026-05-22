@@ -193,7 +193,7 @@ function addMessage(data) {
    WEBSOCKET
 ========================= */
 
-const ws = new WebSocket("ws://localhost:10000/chat");
+const ws = new WebSocket("wss://chatall-4bu9.onrender.com/chat");
 
 ws.onmessage = (e) => {
     addMessage(JSON.parse(e.data));

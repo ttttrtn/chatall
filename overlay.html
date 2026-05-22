@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<title>Multi Platform Chat Overlay</title>
+
+<style>
+body {
+    margin: 0;
+    background: transparent;
+    overflow: hidden;
+    font-family: Arial, sans-serif;
+}
+
+/* CHAT CONTAINER */
+#chat {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* MESSAGE BOX */
+.msg {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+
+    padding: 8px 10px;
+    border-radius: 12px;
+
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(6px);
+
+    animation: pop 0.2s ease-out;
+}
+
+@keyframes pop {
+    from { transform: translateY(10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* PLATFORM ICON */
+.icon {
+    width: 18px;
+    height: 18px;
+    margin-top: 2px;
+}
+
+/* BADGES */
+.badges {
+    display: flex;
+    gap: 4px;
+    margin-right: 6px;
+}
+
+.badge {
+    width: 14px;
+    height: 14px;
+}
+
+/* USERNAME */
+.username {
+    font-weight: bold;
+    margin-right: 6px;
+}
+
+/* MESSAGE TEXT */
+.text {
+    color: white;
+    font-size: 14px;
+}
+
+/* PLATFORM COLORS */
+.twitch { color: #9146FF; }
+.youtube { color: #FF0000; }
+.kick { color: #53FC18; }
+.tiktok { color: #00F2EA; }
+.rumble { color: #85C742; }
+.trovo { color: #F5A623; }
+
+</style>
+</head>
+
+<body>
+
+<div id="chat"></div>
+
+<script>
+const chat = document.getElementById("chat");
+
+/* =========================
+   LOCAL ASSETS
+========================= */
+
+const platformIcons = {
+    twitch: "./assets/platforms/twitch.png",
+    youtube: "./assets/platforms/youtube.png",
+    kick: "./assets/platforms/kick.png",
+    tiktok: "./assets/platforms/tiktok.png",
+    rumble: "./assets/platforms/rumble.png",
+    trovo: "./assets/platforms/trovo.png"
+};
+
+const badgeIcons = {
+    moderator: "./assets/badges/mod.png",
+    subscriber: "./assets/badges/member.png",
+    vip: "./assets/badges/vip.png",
+    owner: "./assets/badges/owner.png",
+    verified: "./assets/badges/verified.png"
+};
+
+/* =========================
+   BADGES
+========================= */
+
+function renderBadges(list = []) {
+    const wrap = document.createElement("span");
+    wrap.className = "badges";
+
+    list.forEach(b => {
+        if (!badgeIcons[b]) return;
+
+        const img = document.createElement("img");
+        img.className = "badge";
+        img.src = badgeIcons[b];
+        wrap.appendChild(img);
+    });
+
+    return wrap;
+}
+
+/* =========================
+   PLATFORM COLOR
+========================= */
+
+function getColor(platform) {
+    return platform || "white";
+}
+
+/* =========================
+   ADD MESSAGE
+========================= */
+
+function addMessage(data) {
+
+    const msg = document.createElement("div");
+    msg.className = "msg";
+
+    /* ICON */
+    const icon = document.createElement("img");
+    icon.className = "icon";
+    icon.src = platformIcons[data.platform] || "";
+
+    /* USER */
+    const user = document.createElement("span");
+    user.className = "username " + data.platform;
+    user.innerText = data.user + ":";
+
+    /* TEXT */
+    const text = document.createElement("span");
+    text.className = "text";
+    text.innerText = data.message;
+
+    /* LINE */
+    const line = document.createElement("div");
+    line.style.display = "flex";
+    line.style.alignItems = "center";
+
+    line.appendChild(renderBadges(data.badges || []));
+    line.appendChild(user);
+
+    /* CONTENT */
+    const content = document.createElement("div");
+    content.appendChild(line);
+    content.appendChild(text);
+
+    msg.appendChild(icon);
+    msg.appendChild(content);
+
+    chat.appendChild(msg);
+
+    /* LIMIT CHAT */
+    if (chat.children.length > 50) {
+        chat.removeChild(chat.firstChild);
+    }
+}
+
+/* =========================
+   WEBSOCKET
+========================= */
+
+const ws = new WebSocket("ws://localhost:10000/chat");
+
+ws.onmessage = (e) => {
+    addMessage(JSON.parse(e.data));
+};
+
+</script>
+
+</body>
+</html>

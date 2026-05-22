@@ -5,11 +5,16 @@ import re
 
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 import websockets
 
 STREAMERBOT_WS = os.getenv("STREAMERBOT_WS", "ws://localhost:8000")
 
 app = FastAPI()
+
+# =========================
+# CORS (IMPORTANT FOR OBS/LOCAL TESTING)
+# =========================
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,6 +23,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# =========================
+# STATIC FILES (THIS FIXES YOUR /overlay.html ISSUE)
+# =========================
+
+app.mount("/", StaticFiles(directory="static", html=True), name="static")
+
+# =========================
+# WEBSOCKET CLIENTS
+# =========================
 
 clients = set()
 queue = asyncio.Queue()
@@ -41,7 +56,7 @@ async def broadcaster():
             clients.remove(d)
 
 # =========================
-# NORMALIZE OUTPUT
+# NORMALIZE MESSAGE
 # =========================
 
 async def push(platform, user, message, badges=None):
@@ -54,7 +69,7 @@ async def push(platform, user, message, badges=None):
 
 # =========================
 # PARSE TIKTOK / RUMBLE TEXT
-# FORMAT: (platform) user: message
+# (platform) username: message
 # =========================
 
 def parse_text(text: str):
@@ -63,9 +78,9 @@ def parse_text(text: str):
         return None
 
     return (
-        match.group(1).lower().strip(),
-        match.group(2).strip(),
-        match.group(3).strip()
+        match.group(1).lower(),
+        match.group(2),
+        match.group(3)
     )
 
 # =========================
@@ -73,7 +88,6 @@ def parse_text(text: str):
 # =========================
 
 async def streamerbot_worker():
-
     async with websockets.connect(STREAMERBOT_WS) as ws:
 
         while True:
@@ -83,43 +97,35 @@ async def streamerbot_worker():
                 msg = json.loads(raw)
 
                 # =========================
-                # TIKTOK / RUMBLE (TEXT MODE)
+                # TEXT MODE (TIKTOK / RUMBLE)
                 # =========================
 
                 if "websocketClient" in msg:
-                    event_type = msg["websocketClient"]
+                    event = msg["websocketClient"]
 
-                    if event_type == "Open":
-                        print("Connected to Streamer.bot")
-
-                    elif event_type == "Close":
-                        print("Disconnected from Streamer.bot")
-
-                    elif event_type == "Message":
+                    if event == "Message":
                         text = msg.get("data", "")
 
                         parsed = parse_text(text)
 
                         if parsed:
                             platform, user, message = parsed
-
                             if platform in ["tiktok", "rumble"]:
                                 await push(platform, user, message)
 
                     continue
 
                 # =========================
-                # TWITCH / YOUTUBE / KICK (JSON MODE)
+                # STRUCTURED MODE (TWITCH/YT/KICK)
                 # =========================
 
                 event = msg.get("event", {})
                 data = msg.get("data", {})
 
-                source = event.get("source")
-                etype = event.get("type")
-
-                if etype != "chat_message":
+                if event.get("type") != "chat_message":
                     continue
+
+                source = event.get("source")
 
                 if source not in ["twitch", "youtube", "kick"]:
                     continue
@@ -144,7 +150,7 @@ async def startup():
     asyncio.create_task(streamerbot_worker())
 
 # =========================
-# OBS WEBSOCKET
+# WEBSOCKET ENDPOINT
 # =========================
 
 @app.websocket("/chat")

@@ -7,7 +7,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 import websockets
 
-STREAMERBOT_WS = os.getenv("STREAMERBOT_WS", "ws://localhost:8080")
+STREAMERBOT_WS = os.getenv("STREAMERBOT_WS", "ws://localhost:8000")
 
 app = FastAPI()
 

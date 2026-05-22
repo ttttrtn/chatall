@@ -87,58 +87,13 @@ def parse_text(text: str):
 # STREAMER.BOT WORKER
 # =========================
 
-async def streamerbot_worker():
-    async with websockets.connect(STREAMERBOT_WS) as ws:
+from fastapi import Request
 
-        while True:
-            raw = await ws.recv()
-
-            try:
-                msg = json.loads(raw)
-
-                # =========================
-                # TEXT MODE (TIKTOK / RUMBLE)
-                # =========================
-
-                if "websocketClient" in msg:
-                    event = msg["websocketClient"]
-
-                    if event == "Message":
-                        text = msg.get("data", "")
-
-                        parsed = parse_text(text)
-
-                        if parsed:
-                            platform, user, message = parsed
-                            if platform in ["tiktok", "rumble"]:
-                                await push(platform, user, message)
-
-                    continue
-
-                # =========================
-                # STRUCTURED MODE (TWITCH/YT/KICK)
-                # =========================
-
-                event = msg.get("event", {})
-                data = msg.get("data", {})
-
-                if event.get("type") != "chat_message":
-                    continue
-
-                source = event.get("source")
-
-                if source not in ["twitch", "youtube", "kick"]:
-                    continue
-
-                await push(
-                    source,
-                    data.get("user", "unknown"),
-                    data.get("message", ""),
-                    data.get("badges", [])
-                )
-
-            except:
-                pass
+@app.post("/event")
+async def event(req: Request):
+    data = await req.json()
+    await queue.put(data)
+    return {"ok": True}
 
 # =========================
 # STARTUP
